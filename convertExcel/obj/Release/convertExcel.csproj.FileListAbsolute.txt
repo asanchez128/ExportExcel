@@ -3,3 +3,4 @@ C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\bin\Release\con
 C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\bin\Release\convertExcel.pdb
 C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\obj\Release\convertExcel.exe
 C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\obj\Release\convertExcel.pdb
+C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\obj\Release\convertExcel.csprojResolveAssemblyReference.cache

@@ -14,7 +14,7 @@ namespace ConvertExcel
         {
             List<ExpandoObject> expandoList = CreateExcelFile.GetSpreadsheetData("16 SEMANAS", "carpetaPagosGrupales.xlsx");
             CreateExcelFile.WriteExcelFileFromExpandoList(expandoList, "myNewSpreadsheet.xlsx");
-            CreateExcelFile.ConvertExcelArchiveToListObjects("DataDownload.xlsx");
+            CreateExcelFile.ConvertExcelArchiveToListObjects("Sample.xlsx");
         }
     }
 

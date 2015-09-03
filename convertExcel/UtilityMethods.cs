@@ -9,6 +9,8 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml;
 using System.Dynamic;
+using System.Reflection.Emit;
+using System.Threading;
 
 namespace ConvertExcel
 {
@@ -313,50 +315,181 @@ namespace ConvertExcel
               Elements<Row>().Where(r => r.RowIndex == rowIndex).First();
         } 
 
-        public static List<ExpandoObject> ConvertExcelArchiveToListObjects(string filePath)
+        //public static List<ExpandoObject> ConvertExcelArchiveToListObjects(string filePath)
+        //{
+        //    DateTime begin = DateTime.UtcNow;
+        //    List<ExpandoObject> listExpandoObjects = new List<ExpandoObject>();
+        //    using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
+        //    {
+        //        WorkbookPart wbPart = spreadsheetDocument.WorkbookPart;
+        //        Sheets theSheets = wbPart.Workbook.Sheets;
+
+        //        SharedStringTablePart sstPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
+        //        SharedStringTable ssTable = null;
+        //        if (sstPart != null)
+        //            ssTable = sstPart.SharedStringTable;
+                
+        //        // Get the CellFormats for cells without defined data types
+        //        WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
+        //        CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
+        //        var sheets = wbPart.Workbook.Sheets.Cast<Sheet>().ToList();
+
+        //        foreach (WorksheetPart worksheetpart in wbPart.WorksheetParts)
+        //        {                     
+        //            Worksheet worksheet = worksheetpart.Worksheet;
+
+        //            string partRelationshipId = wbPart.GetIdOfPart(worksheetpart);
+        //            var correspondingSheet = sheets.FirstOrDefault(
+        //                s => s.Id.HasValue && s.Id.Value == partRelationshipId);
+        //            Debug.Assert(correspondingSheet != null);
+        //            string sheetName = correspondingSheet.GetAttribute("name", "").Value;
+        //            // Grab the sheet name each time through your loop
+                    
+        //            Debug.WriteLine(sheetName);
+        //            var rowContent = worksheet.Descendants<Row>().Skip(1); 
+        //            var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
+
+        //            dynamic expandoObjectClass = new ExpandoObject();
+        //            List<ExpandoObject> listExpandoObjectRows = new List<ExpandoObject>();
+        //            foreach (var dataRow in rowContent)
+        //            {
+        //                dynamic row = new ExpandoObject();
+        //                var rowCells = dataRow.Descendants<Cell>();
+        //                int cellIndex = 0;
+        //                foreach (var rowCell in rowCells)
+        //                {
+        //                    if (rowCell.DataType != null
+        //                        && rowCell.DataType.HasValue
+        //                        && rowCell.DataType == CellValues.SharedString
+        //                        && int.Parse(rowCell.CellValue.InnerText) < ssTable.ChildElements.Count)
+        //                    {
+        //                        ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty);
+        //                    }
+        //                    else
+        //                    {
+        //                        if (rowCell.CellValue != null && rowCell.CellValue.InnerText != null)
+        //                        {
+        //                            Debug.WriteLine(rowCell.CellValue.InnerText);
+        //                            ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), rowCell.CellValue.InnerText);
+        //                        }
+        //                        else 
+        //                        {
+        //                            Debug.WriteLine(string.Empty);
+        //                            ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), string.Empty);
+        //                        }
+        //                    }
+        //                    ++cellIndex;
+        //                }
+        //                listExpandoObjectRows.Add(row);
+                        
+        //            }
+        //            ((IDictionary<String, Object>)expandoObjectClass).Add(sheetName, listExpandoObjectRows);
+        //            listExpandoObjects.Add(expandoObjectClass);
+        //        }
+
+        //        spreadsheetDocument.Close();
+        //    }
+        //    DateTime end = DateTime.UtcNow;
+        //    Console.WriteLine("Measured time: " + (end-begin).TotalMinutes + " minutes.");
+        //    return listExpandoObjects;
+        //}
+
+        public static List<Object> ConvertExcelArchiveToListObjects(string filePath)
         {
             DateTime begin = DateTime.UtcNow;
-            List<ExpandoObject> listExpandoObjects = new List<ExpandoObject>();
+            List<Object> listObjects = new List<Object>();
             using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
             {
                 WorkbookPart wbPart = spreadsheetDocument.WorkbookPart;
                 Sheets theSheets = wbPart.Workbook.Sheets;
 
-                int sheetIndex = 0;
-
                 SharedStringTablePart sstPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
                 SharedStringTable ssTable = null;
                 if (sstPart != null)
                     ssTable = sstPart.SharedStringTable;
-                
+
                 // Get the CellFormats for cells without defined data types
                 WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
                 CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
                 var sheets = wbPart.Workbook.Sheets.Cast<Sheet>().ToList();
 
                 foreach (WorksheetPart worksheetpart in wbPart.WorksheetParts)
-                {                     
+                {
                     Worksheet worksheet = worksheetpart.Worksheet;
 
                     string partRelationshipId = wbPart.GetIdOfPart(worksheetpart);
                     var correspondingSheet = sheets.FirstOrDefault(
                         s => s.Id.HasValue && s.Id.Value == partRelationshipId);
                     Debug.Assert(correspondingSheet != null);
+                    // Grab the sheet name
                     string sheetName = correspondingSheet.GetAttribute("name", "").Value;
-                    // Grab the sheet name each time through your loop
-                    
-                    Debug.WriteLine(sheetName);
-                    var rowContent = worksheet.Descendants<Row>().Skip(1); 
-                    var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
 
-                    int dataRowIndex = 1;
+                    // create a dynamic assembly and module
+                    AssemblyName assemblyName = new AssemblyName();
+                    assemblyName.Name = "tmpAssembly";
+                    AssemblyBuilder assemblyBuilder = Thread.GetDomain().DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+                    ModuleBuilder module = assemblyBuilder.DefineDynamicModule("tmpModule");
+
+                    // create a new type builder
+                    TypeBuilder typeBuilder = module.DefineType("MyDynamicType", TypeAttributes.Public | TypeAttributes.Class);
+
+                    Debug.WriteLine(sheetName);
+                    var rowContent = worksheet.Descendants<Row>().Skip(1);
+                    
+                    var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
+                    MethodAttributes GetSetAttr =
+                       MethodAttributes.Public |
+                       MethodAttributes.HideBySig;
+                    foreach (var columnName in columnHeaders){
+                        // Generate a public property
+                        var field = typeBuilder.DefineField("_" + columnName.ToString(), typeof(String), FieldAttributes.Private);
+                        PropertyBuilder property =
+                            typeBuilder.DefineProperty(columnName.ToString(),
+                                             System.Reflection.PropertyAttributes.None,
+                                             typeof(string),
+                                             new Type[] { typeof(string) });
+
+                        // Generate getter method
+
+                        var getter = typeBuilder.DefineMethod("get_" + columnName.ToString(), GetSetAttr, typeof(String), Type.EmptyTypes);
+
+                        var il = getter.GetILGenerator();
+
+                        il.Emit(OpCodes.Ldarg_0);        // Push "this" on the stack
+                        il.Emit(OpCodes.Ldfld, field);   // Load the field "_Name"
+                        il.Emit(OpCodes.Ret);            // Return
+
+                        property.SetGetMethod(getter);
+
+                        // Generate setter method
+
+                        var setter = typeBuilder.DefineMethod("set_" + columnName, GetSetAttr, null, new[] { typeof(string) });
+
+                        il = setter.GetILGenerator();
+
+                        il.Emit(OpCodes.Ldarg_0);        // Push "this" on the stack
+                        il.Emit(OpCodes.Ldarg_1);        // Push "value" on the stack
+                        il.Emit(OpCodes.Stfld, field);   // Set the field "_Name" to "value"
+                        il.Emit(OpCodes.Ret);            // Return
+
+                        property.SetSetMethod(setter);
+                    }
+
                     dynamic expandoObjectClass = new ExpandoObject();
-                    List<ExpandoObject> listExpandoObjectRows = new List<ExpandoObject>();
+                    List<Object> listObjectsCustomClasses  = new List<Object>();
                     foreach (var dataRow in rowContent)
                     {
-                        dynamic row = new ExpandoObject();
+                        Type generatedType = typeBuilder.CreateType();
+                        object generatedObject = Activator.CreateInstance(generatedType);
+
+                        PropertyInfo[] properties = generatedType.GetProperties();
+
+                        int propertiesCounter = 0;
+
+                        // Loop over the values that we will assign to the properties
+
                         var rowCells = dataRow.Descendants<Cell>();
-                        int cellIndex = 0;
+                        var value = string.Empty;
                         foreach (var rowCell in rowCells)
                         {
                             if (rowCell.DataType != null
@@ -365,36 +498,37 @@ namespace ConvertExcel
                                 && int.Parse(rowCell.CellValue.InnerText) < ssTable.ChildElements.Count)
                             {
                                 // Debug.WriteLine(ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty);
-                                ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty);
+                                value = ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty;
+                                    
                             }
                             else
                             {
                                 if (rowCell.CellValue != null && rowCell.CellValue.InnerText != null)
                                 {
                                     Debug.WriteLine(rowCell.CellValue.InnerText);
-                                    ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), rowCell.CellValue.InnerText);
+                                    value = rowCell.CellValue.InnerText;
+
                                 }
-                                else 
+                                else
                                 {
                                     Debug.WriteLine(string.Empty);
-                                    ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), string.Empty);
+                                    value = string.Empty;
                                 }
                             }
-                            ++cellIndex;
+                            properties[propertiesCounter].SetValue(generatedObject, value, null);
+                            propertiesCounter++;
+                        
                         }
-                        listExpandoObjectRows.Add(row);
-                        ++dataRowIndex;
+                        listObjectsCustomClasses.Add(generatedObject);
                     }
-                    ((IDictionary<String, Object>)expandoObjectClass).Add(sheetName, listExpandoObjectRows);
-                    listExpandoObjects.Add(expandoObjectClass);
-                    sheetIndex++;
+                    listObjects.Add(listObjectsCustomClasses);
                 }
 
                 spreadsheetDocument.Close();
             }
-             DateTime end = DateTime.UtcNow;
-             Console.WriteLine("Measured time: " + (end-begin).TotalMinutes + " minutes.");
-            return listExpandoObjects;
+            DateTime end = DateTime.UtcNow;
+            Console.WriteLine("Measured time: " + (end - begin).TotalMinutes + " minutes.");
+            return listObjects;
         }
     }
 }
