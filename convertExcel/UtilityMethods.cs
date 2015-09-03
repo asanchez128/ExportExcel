@@ -315,6 +315,7 @@ namespace ConvertExcel
 
         public static List<ExpandoObject> ConvertExcelArchiveToListObjects(string filePath)
         {
+            DateTime begin = DateTime.UtcNow;
             List<ExpandoObject> listExpandoObjects = new List<ExpandoObject>();
             using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
             {
@@ -391,7 +392,8 @@ namespace ConvertExcel
 
                 spreadsheetDocument.Close();
             }
-
+             DateTime end = DateTime.UtcNow;
+             Console.WriteLine("Measured time: " + (end-begin).TotalMinutes + " minutes.");
             return listExpandoObjects;
         }
     }

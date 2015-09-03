@@ -12,13 +12,10 @@ namespace ConvertExcel
     {
         static void Main(string[] args)
         {
-            CreateExcelFile.CreateExcelDocument(myList, "mySpreadsheet.xlsx");
             List<ExpandoObject> expandoList = CreateExcelFile.GetSpreadsheetData("16 SEMANAS", "carpetaPagosGrupales.xlsx");
             CreateExcelFile.WriteExcelFileFromExpandoList(expandoList, "myNewSpreadsheet.xlsx");
             CreateExcelFile.ConvertExcelArchiveToListObjects("DataDownload.xlsx");
         }
-
-
     }
 
     class ExportExcel
