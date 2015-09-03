@@ -1,0 +1,6 @@
+C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\bin\Debug\convertExcel.exe.config
+C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\obj\Debug\convertExcel.csprojResolveAssemblyReference.cache
+C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\bin\Debug\convertExcel.exe
+C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\bin\Debug\convertExcel.pdb
+C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\obj\Debug\convertExcel.exe
+C:\Users\Ama\Documents\LINQPad Queries\convertExcel\convertExcel\obj\Debug\convertExcel.pdb
