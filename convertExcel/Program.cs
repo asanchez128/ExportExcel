@@ -14,8 +14,8 @@ namespace ConvertExcel
         {
             List<ExpandoObject> expandoList = CreateExcelFile.GetSpreadsheetData("16 SEMANAS", "carpetaPagosGrupales.xlsx");
             CreateExcelFile.WriteExcelFileFromExpandoList(expandoList, "myNewSpreadsheet.xlsx");
-            CreateExcelFile.ConvertExcelArchiveToListObjects("Sample.xlsx");
-            CreateExcelFile.ConvertExcelArchiveToListObjectsSAXApproach("Sample.xlsx");
+            //CreateExcelFile.ConvertExcelArchiveToListObjects("copiaDeSample.xlsx");
+            CreateExcelFile.ConvertExcelArchiveToListObjectsSAXApproach("Notes.xlsx");
         }
     }
 
