@@ -74,7 +74,7 @@ namespace ConvertExcel
             // All rows are selected.
             var spreadsheetData = from row in worksheet.Descendants<Row>()
                                   select row;
-            
+
             int dataRowIndex = 1;
             foreach (var dataRow in spreadsheetData)
             {
@@ -100,7 +100,8 @@ namespace ConvertExcel
             // If there is no data type, this must be a string that has been formatted as a number
             if (c.DataType == null && c.CellValue != null)
             {
-                if (c.StyleIndex != null){
+                if (c.StyleIndex != null)
+                {
                     CellFormat cf = cellFormats.Descendants<CellFormat>().ElementAt<CellFormat>(Convert.ToInt32(c.StyleIndex.Value));
                     if (cf.NumberFormatId >= 0 && cf.NumberFormatId <= 13) // This is a number
                         return Convert.ToDecimal(c.CellValue.Text);
@@ -133,7 +134,7 @@ namespace ConvertExcel
                         return string.Empty;
                 }
             }
-            else 
+            else
             {
                 if (c.CellValue != null)
                     return c.CellValue.Text;
@@ -313,7 +314,7 @@ namespace ConvertExcel
         {
             return worksheet.GetFirstChild<SheetData>().
               Elements<Row>().Where(r => r.RowIndex == rowIndex).First();
-        } 
+        }
 
         //public static List<ExpandoObject> ConvertExcelArchiveToListObjects(string filePath)
         //{
@@ -328,7 +329,7 @@ namespace ConvertExcel
         //        SharedStringTable ssTable = null;
         //        if (sstPart != null)
         //            ssTable = sstPart.SharedStringTable;
-                
+
         //        // Get the CellFormats for cells without defined data types
         //        WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
         //        CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
@@ -344,7 +345,7 @@ namespace ConvertExcel
         //            Debug.Assert(correspondingSheet != null);
         //            string sheetName = correspondingSheet.GetAttribute("name", "").Value;
         //            // Grab the sheet name each time through your loop
-                    
+
         //            Debug.WriteLine(sheetName);
         //            var rowContent = worksheet.Descendants<Row>().Skip(1); 
         //            var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
@@ -381,7 +382,7 @@ namespace ConvertExcel
         //                    ++cellIndex;
         //                }
         //                listExpandoObjectRows.Add(row);
-                        
+
         //            }
         //            ((IDictionary<String, Object>)expandoObjectClass).Add(sheetName, listExpandoObjectRows);
         //            listExpandoObjects.Add(expandoObjectClass);
@@ -435,12 +436,13 @@ namespace ConvertExcel
 
                     Debug.WriteLine(sheetName);
                     var rowContent = worksheet.Descendants<Row>().Skip(1);
-                    
+
                     var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
                     MethodAttributes GetSetAttr =
                        MethodAttributes.Public |
                        MethodAttributes.HideBySig;
-                    foreach (var columnName in columnHeaders){
+                    foreach (var columnName in columnHeaders)
+                    {
                         // Generate a public property
                         var field = typeBuilder.DefineField("_" + columnName.ToString(), typeof(String), FieldAttributes.Private);
                         PropertyBuilder property =
@@ -450,7 +452,6 @@ namespace ConvertExcel
                                              new Type[] { typeof(string) });
 
                         // Generate getter method
-
                         var getter = typeBuilder.DefineMethod("get_" + columnName.ToString(), GetSetAttr, typeof(String), Type.EmptyTypes);
 
                         var il = getter.GetILGenerator();
@@ -476,7 +477,7 @@ namespace ConvertExcel
                     }
 
                     dynamic expandoObjectClass = new ExpandoObject();
-                    List<Object> listObjectsCustomClasses  = new List<Object>();
+                    List<Object> listObjectsCustomClasses = new List<Object>();
                     foreach (var dataRow in rowContent)
                     {
                         Type generatedType = typeBuilder.CreateType();
@@ -497,34 +498,227 @@ namespace ConvertExcel
                                 && rowCell.DataType == CellValues.SharedString
                                 && int.Parse(rowCell.CellValue.InnerText) < ssTable.ChildElements.Count)
                             {
-                                // Debug.WriteLine(ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty);
                                 value = ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty;
-                                    
                             }
                             else
                             {
                                 if (rowCell.CellValue != null && rowCell.CellValue.InnerText != null)
                                 {
-                                    Debug.WriteLine(rowCell.CellValue.InnerText);
                                     value = rowCell.CellValue.InnerText;
-
                                 }
                                 else
                                 {
-                                    Debug.WriteLine(string.Empty);
                                     value = string.Empty;
                                 }
                             }
                             properties[propertiesCounter].SetValue(generatedObject, value, null);
                             propertiesCounter++;
-                        
                         }
                         listObjectsCustomClasses.Add(generatedObject);
                     }
                     listObjects.Add(listObjectsCustomClasses);
                 }
+            }
+            DateTime end = DateTime.UtcNow;
+            Console.WriteLine("Measured time: " + (end - begin).TotalMinutes + " minutes.");
+            return listObjects;
+        }
 
-                spreadsheetDocument.Close();
+        public static List<Object> ConvertExcelArchiveToListObjectsSAXApproach(string filePath)
+        {
+            DateTime begin = DateTime.UtcNow;
+            List<Object> listObjects = new List<Object>();
+            using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
+            {
+                WorkbookPart wbPart = spreadsheetDocument.WorkbookPart;
+                Sheets theSheets = wbPart.Workbook.Sheets;
+
+                SharedStringTablePart sstPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
+                SharedStringTable ssTable = null;
+                if (sstPart != null)
+                    ssTable = sstPart.SharedStringTable;
+
+                // Get the CellFormats for cells without defined data types
+                WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
+                CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
+                var sheets = wbPart.Workbook.Sheets.Cast<Sheet>().ToList();
+
+                foreach (WorksheetPart worksheetpart in wbPart.WorksheetParts)
+                {
+                    //Worksheet worksheet = worksheetpart.Worksheet;
+                    OpenXmlPartReader reader = new OpenXmlPartReader(worksheetpart);
+                    bool firstRow = false;
+                    String[] columnValues;
+                    String rowNum;
+                    Cell c;
+                    var value = string.Empty;
+                    while (reader.Read())
+                    {
+                        if (reader.ElementType == typeof(SheetData))
+                        {
+                            do
+                            {
+                                // get row child
+                                reader.ReadFirstChild();
+                                if (firstRow == false)
+                                {
+                                    firstRow = true;
+                                    do
+                                    {
+                                        if (reader.ElementType == typeof(Row))
+                                        {
+                                            Debug.WriteLine("Row");
+                                            reader.ReadFirstChild();
+                                            do
+                                            {
+                                                if (reader.ElementType == typeof(Cell))
+                                                {
+                                                    c = (Cell)reader.LoadCurrentElement();
+
+                                                    if (c.DataType != null
+                                                        && c.DataType.HasValue
+                                                        && c.DataType == CellValues.SharedString
+                                                        && int.Parse(c.CellValue.InnerText) < ssTable.ChildElements.Count)
+                                                    {
+                                                        value = ssTable.ChildElements[int.Parse(c.CellValue.InnerText)].InnerText ?? string.Empty;
+                                                    }
+                                                    else
+                                                    {
+                                                        if (c.CellValue != null && c.CellValue.InnerText != null)
+                                                        {
+                                                            value = c.CellValue.InnerText;
+                                                        }
+                                                        else
+                                                        {
+                                                            value = string.Empty;
+                                                        }
+                                                    }
+                                                    Debug.WriteLine(value);
+                                                }
+                                            } while (reader.ReadNextSibling()); 
+                                        }
+
+                                    } while (reader.ReadNextSibling());
+                                }
+                                else
+                                {
+                                    do
+                                    {
+                                        if (reader.HasAttributes)
+                                        {
+
+                                        }
+                                    } while (reader.ReadNextSibling());
+                                }
+
+
+                            } while (reader.ReadNextSibling()); // Skip to the next row
+                            break; // We just looped through all the rows so no need to continue reading the worksheet
+                        }
+                    }
+
+                    //string partRelationshipId = wbPart.GetIdOfPart(worksheetpart);
+                    //var correspondingSheet = sheets.FirstOrDefault(
+                    //    s => s.Id.HasValue && s.Id.Value == partRelationshipId);
+                    //Debug.Assert(correspondingSheet != null);
+                    //// Grab the sheet name
+                    //string sheetName = correspondingSheet.GetAttribute("name", "").Value;
+
+                    //// create a dynamic assembly and module
+                    //AssemblyName assemblyName = new AssemblyName();
+                    //assemblyName.Name = "tmpAssembly";
+                    //AssemblyBuilder assemblyBuilder = Thread.GetDomain().DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+                    //ModuleBuilder module = assemblyBuilder.DefineDynamicModule("tmpModule");
+
+                    //// create a new type builder
+                    //TypeBuilder typeBuilder = module.DefineType("MyDynamicType", TypeAttributes.Public | TypeAttributes.Class);
+
+                    //Debug.WriteLine(sheetName);
+                    //var rowContent = worksheet.Descendants<Row>().Skip(1);
+
+                    //var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
+                    //MethodAttributes GetSetAttr =
+                    //   MethodAttributes.Public |
+                    //   MethodAttributes.HideBySig;
+                    //foreach (var columnName in columnHeaders)
+                    //{
+                    //    // Generate a public property
+                    //    var field = typeBuilder.DefineField("_" + columnName.ToString(), typeof(String), FieldAttributes.Private);
+                    //    PropertyBuilder property =
+                    //        typeBuilder.DefineProperty(columnName.ToString(),
+                    //                         System.Reflection.PropertyAttributes.None,
+                    //                         typeof(string),
+                    //                         new Type[] { typeof(string) });
+
+                    //    // Generate getter method
+                    //    var getter = typeBuilder.DefineMethod("get_" + columnName.ToString(), GetSetAttr, typeof(String), Type.EmptyTypes);
+
+                    //    var il = getter.GetILGenerator();
+
+                    //    il.Emit(OpCodes.Ldarg_0);        // Push "this" on the stack
+                    //    il.Emit(OpCodes.Ldfld, field);   // Load the field "_Name"
+                    //    il.Emit(OpCodes.Ret);            // Return
+
+                    //    property.SetGetMethod(getter);
+
+                    //    // Generate setter method
+
+                    //    var setter = typeBuilder.DefineMethod("set_" + columnName, GetSetAttr, null, new[] { typeof(string) });
+
+                    //    il = setter.GetILGenerator();
+
+                    //    il.Emit(OpCodes.Ldarg_0);        // Push "this" on the stack
+                    //    il.Emit(OpCodes.Ldarg_1);        // Push "value" on the stack
+                    //    il.Emit(OpCodes.Stfld, field);   // Set the field "_Name" to "value"
+                    //    il.Emit(OpCodes.Ret);            // Return
+
+                    //    property.SetSetMethod(setter);
+                    //}
+
+                    //dynamic expandoObjectClass = new ExpandoObject();
+                    //List<Object> listObjectsCustomClasses = new List<Object>();
+                    //foreach (var dataRow in rowContent)
+                    //{
+                    //    Type generatedType = typeBuilder.CreateType();
+                    //    object generatedObject = Activator.CreateInstance(generatedType);
+
+                    //    PropertyInfo[] properties = generatedType.GetProperties();
+
+                    //    int propertiesCounter = 0;
+
+                    //    // Loop over the values that we will assign to the properties
+
+                    //    var rowCells = dataRow.Descendants<Cell>();
+                    //    var value = string.Empty;
+                    //    foreach (var rowCell in rowCells)
+                    //    {
+                    //        if (rowCell.DataType != null
+                    //            && rowCell.DataType.HasValue
+                    //            && rowCell.DataType == CellValues.SharedString
+                    //            && int.Parse(rowCell.CellValue.InnerText) < ssTable.ChildElements.Count)
+                    //        {
+                    //            value = ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty;
+
+                    //        }
+                    //        else
+                    //        {
+                    //            if (rowCell.CellValue != null && rowCell.CellValue.InnerText != null)
+                    //            {
+                    //                value = rowCell.CellValue.InnerText;
+
+                    //            }
+                    //            else
+                    //            {
+                    //                value = string.Empty;
+                    //            }
+                    //        }
+                    //        properties[propertiesCounter].SetValue(generatedObject, value, null);
+                    //        propertiesCounter++;
+                    //    }
+                    //    listObjectsCustomClasses.Add(generatedObject);
+                    //}
+                    //listObjects.Add(listObjectsCustomClasses);
+                }
             }
             DateTime end = DateTime.UtcNow;
             Console.WriteLine("Measured time: " + (end - begin).TotalMinutes + " minutes.");
