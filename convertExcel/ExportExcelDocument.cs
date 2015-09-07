@@ -135,7 +135,11 @@ namespace ConvertExcel
         /// <summary>
         /// Convierte el contenido de un archivo de Excel en una lista de objectos usando un parseador de XML.
         /// Asume que cada hoja en el archivo de Excel representa a un objecto y que la primera fila de cada 
-        /// hoja contiene las columnas que describen las propiedades del objeto.
+        /// hoja contiene las columnas que describen las propiedades del objeto. También asume que los nombres 
+        /// de las columnas no se repiten. En caso de repetirse el nombre de alguna columna solo se guardará en 
+        /// el objeto una sola vez.
+        /// También se da por sentado que todos los datos en una columna a excepción del encabezado son del 
+        /// mismo tipo.
         /// </summary>
         /// <exception cref="System.IO.IOException">Excepción lanzada cuando el archivo de Excel 
         /// está siendo usado por otro proceso.</exception>
@@ -176,7 +180,11 @@ namespace ConvertExcel
                     {
                         sheetName = correspondingSheet.GetAttribute("name", "").Value;
                     }
-                    
+
+                    if (sheetName == string.Empty)
+                    {
+                        sheetName = "MyDynamicType";
+                    }
                     // Crea un ensamblado dinámico y un módulo.
                     AssemblyName assemblyName = new AssemblyName();
                     assemblyName.Name = "tmpAssembly";
@@ -184,12 +192,15 @@ namespace ConvertExcel
                     ModuleBuilder module = assemblyBuilder.DefineDynamicModule("tmpModule");
 
                     // Crea un nuevo constructor de tipos.
-                    TypeBuilder typeBuilder = module.DefineType("MyDynamicType", TypeAttributes.Public | TypeAttributes.Class);
+                    TypeBuilder typeBuilder = module.DefineType(sheetName, TypeAttributes.Public | TypeAttributes.Class);
 
                     MethodAttributes GetSetAttr =
                        MethodAttributes.Public |
                        MethodAttributes.HideBySig;
                     int numberOfColumns = 0;
+
+                    bool firstRowInformation = false;
+                    
                     while (reader.Read())
                     {
                         if (reader.ElementType == typeof(SheetData))
@@ -310,7 +321,7 @@ namespace ConvertExcel
                                                 }
                                             }
 
-                                            if (propertiesCounter < numberOfColumns)
+                                            if (propertiesCounter < properties.Count())
                                             {
                                                 properties[propertiesCounter].SetValue(generatedObject, value, null);
                                             }
@@ -355,8 +366,13 @@ namespace ConvertExcel
                         s => s.Id.HasValue && s.Id.Value == partRelationshipId);
                     Debug.Assert(correspondingSheet != null);
                     // Grab the sheet name
-                    string sheetName = correspondingSheet.GetAttribute("name", "").Value;
+                    string sheetName = string.Empty;
+                    sheetName = correspondingSheet.GetAttribute("name", "").Value;
 
+                    if (sheetName == string.Empty) 
+                    {
+                        sheetName = "MyDynamicType";
+                    }
                     // create a dynamic assembly and module
                     AssemblyName assemblyName = new AssemblyName();
                     assemblyName.Name = "tmpAssembly";
@@ -364,7 +380,7 @@ namespace ConvertExcel
                     ModuleBuilder module = assemblyBuilder.DefineDynamicModule("tmpModule");
 
                     // create a new type builder
-                    TypeBuilder typeBuilder = module.DefineType("MyDynamicType", TypeAttributes.Public | TypeAttributes.Class);
+                    TypeBuilder typeBuilder = module.DefineType(sheetName, TypeAttributes.Public | TypeAttributes.Class);
 
                     Debug.WriteLine(sheetName);
                     var rowContent = worksheet.Descendants<Row>().Skip(1);

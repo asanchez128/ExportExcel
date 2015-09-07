@@ -220,16 +220,26 @@ namespace ConvertExcel
             Stylesheet stylesheet = new Stylesheet();
             workbookStylesPart.Stylesheet = stylesheet;
 
-            //SharedStringTablePart shareStringPart;
-            //if (workbookpart.GetPartsOfType<SharedStringTablePart>().Count() > 0)
-            //{
-            //    shareStringPart = workbookpart.GetPartsOfType<SharedStringTablePart>().First();
-            //}
-            //else
-            //{
-            //    shareStringPart = workbookpart.AddNewPart<SharedStringTablePart>();
-            //}
-            
+            SharedStringTablePart shareStringPart;
+            if (workbookpart.GetPartsOfType<SharedStringTablePart>().Count() > 0)
+            {
+                shareStringPart = workbookpart.GetPartsOfType<SharedStringTablePart>().First();
+            }
+            else
+            {
+                shareStringPart = workbookpart.AddNewPart<SharedStringTablePart>();
+            }
+
+            SharedStringTable sharedStringTable =
+                    new SharedStringTable()
+                    {
+                        Count = (UInt32Value)1U,
+                        UniqueCount =
+                            (UInt32Value)1U
+                    };
+            shareStringPart.SharedStringTable = sharedStringTable;
+
+
             //  Loop through each of the DataTables in our DataSet, and create a new Excel Worksheet for each.
             uint worksheetNumber = 1;
             
@@ -239,9 +249,9 @@ namespace ConvertExcel
             {
                 string workSheetID = "rId" + worksheetNumber.ToString();
                 string worksheetName = string.Empty;
-                if (listObjects.Count > 0)
+                if (item.Count > 0)
                 {
-                    worksheetName = listObjects[0].GetType().Name.ToString();
+                    worksheetName = item[0].GetType().Name.ToString();
                 }
                 if (worksheetName == string.Empty)
                 {
@@ -266,7 +276,7 @@ namespace ConvertExcel
                 {
                     Id = spreadsheet.WorkbookPart.GetIdOfPart(newWorksheetPart),
                     SheetId = (uint)worksheetNumber,
-                    Name = worksheetNumber.ToString()
+                    Name = worksheetName
                 });
 
                 worksheetNumber++;
