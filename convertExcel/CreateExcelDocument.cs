@@ -96,6 +96,31 @@ namespace ConvertExcel
             return data1;
         }
 
+
+        /// <summary>
+        /// Create an Excel file, and write it out to a MemoryStream (rather than directly to a file)
+        /// </summary>
+        /// <param name="ds">DataSet containing the data to be written to the Excel.</param>
+        /// <param name="filename">The filename (without a path) to call the new Excel file.</param>
+        /// <param name="Response">HttpResponse of the current page.</param>
+        /// <returns>Either a MemoryStream, or NULL if something goes wrong.</returns>
+        public static byte[] CreateExcelDocumentAsStream(List<List<Object>> listObjects)
+        {
+            System.IO.MemoryStream stream = new System.IO.MemoryStream();
+            using (SpreadsheetDocument document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook, true))
+            {
+                WriteListListObjectsToExcelFile(listObjects, document);
+            }
+            stream.Flush();
+            stream.Position = 0;
+
+            byte[] data1 = new byte[stream.Length];
+            stream.Read(data1, 0, data1.Length);
+            stream.Close();
+            return data1;
+        }
+
+        #region public static bool CreateExcelDocument(DataSet ds, string excelFilename)
         /// <summary>
         /// Create an Excel file, and write it to a file.
         /// </summary>
@@ -119,16 +144,23 @@ namespace ConvertExcel
                 return false;
             }
         }
+        #endregion
 
+        #region private static void WriteExcelFile(DataSet ds, SpreadsheetDocument spreadsheet)
         private static void WriteExcelFile(DataSet ds, SpreadsheetDocument spreadsheet)
         {
             //  Create the Excel file contents.  This function is used when creating an Excel file either writing 
             //  to a file, or writing to a MemoryStream.
             WorkbookPart workbookpart = spreadsheet.AddWorkbookPart();
-            workbookpart.Workbook = new Workbook();
+            workbookpart.Workbook = new Workbook(); 
             workbookpart.Workbook.Save();
-            //spreadsheet.WorkbookPart.Workbook = new DocumentFormat.OpenXml.Spreadsheet.Workbook();
             WorkbookPart wbPart = spreadsheet.WorkbookPart;
+
+            spreadsheet.WorkbookPart.Workbook.Append(new BookViews(new WorkbookView()));
+
+            WorkbookStylesPart workbookStylesPart = spreadsheet.WorkbookPart.AddNewPart<WorkbookStylesPart>("rIdStyles");
+            Stylesheet stylesheet = new Stylesheet();
+            workbookStylesPart.Stylesheet = stylesheet;
 
             SharedStringTablePart shareStringPart;
             if (workbookpart.GetPartsOfType<SharedStringTablePart>().Count() > 0)
@@ -140,16 +172,8 @@ namespace ConvertExcel
                 shareStringPart = workbookpart.AddNewPart<SharedStringTablePart>();
             }
 
-            //  My thanks to James Miera for the following line of code (which prevents crashes in Excel 2010)
-            spreadsheet.WorkbookPart.Workbook.Append(new BookViews(new WorkbookView()));
-
-            //  If we don't add a "WorkbookStylesPart", OLEDB will refuse to connect to this .xlsx file !
-            WorkbookStylesPart workbookStylesPart = spreadsheet.WorkbookPart.AddNewPart<WorkbookStylesPart>("rIdStyles");
-            Stylesheet stylesheet = new Stylesheet();
-            workbookStylesPart.Stylesheet = stylesheet;
-
-            //  Loop through each of the DataTables in our DataSet, and create a new Excel Worksheet for each.
             uint worksheetNumber = 1;
+
             foreach (DataTable dt in ds.Tables)
             {
                 //  For each worksheet you want to create
@@ -182,7 +206,76 @@ namespace ConvertExcel
 
             spreadsheet.WorkbookPart.Workbook.Save();
         }
+        #endregion
 
+        private static void WriteListListObjectsToExcelFile(List<List<Object>> listObjects, SpreadsheetDocument spreadsheet)
+        {
+            WorkbookPart workbookpart = spreadsheet.AddWorkbookPart();
+            workbookpart.Workbook = new Workbook();
+            WorkbookPart wbPart = spreadsheet.WorkbookPart;
+
+            spreadsheet.WorkbookPart.Workbook.Append(new BookViews(new WorkbookView()));
+
+            WorkbookStylesPart workbookStylesPart = spreadsheet.WorkbookPart.AddNewPart<WorkbookStylesPart>("rIdStyles");
+            Stylesheet stylesheet = new Stylesheet();
+            workbookStylesPart.Stylesheet = stylesheet;
+
+            //SharedStringTablePart shareStringPart;
+            //if (workbookpart.GetPartsOfType<SharedStringTablePart>().Count() > 0)
+            //{
+            //    shareStringPart = workbookpart.GetPartsOfType<SharedStringTablePart>().First();
+            //}
+            //else
+            //{
+            //    shareStringPart = workbookpart.AddNewPart<SharedStringTablePart>();
+            //}
+            
+            //  Loop through each of the DataTables in our DataSet, and create a new Excel Worksheet for each.
+            uint worksheetNumber = 1;
+            
+
+
+            foreach (var item in listObjects)
+            {
+                string workSheetID = "rId" + worksheetNumber.ToString();
+                string worksheetName = string.Empty;
+                if (listObjects.Count > 0)
+                {
+                    worksheetName = listObjects[0].GetType().Name.ToString();
+                }
+                if (worksheetName == string.Empty)
+                {
+                    worksheetName = worksheetNumber.ToString();
+                }
+
+                WorksheetPart newWorksheetPart = spreadsheet.WorkbookPart.AddNewPart<WorksheetPart>();
+                newWorksheetPart.Worksheet = new DocumentFormat.OpenXml.Spreadsheet.Worksheet();
+
+                // create sheet data
+                newWorksheetPart.Worksheet.AppendChild(new DocumentFormat.OpenXml.Spreadsheet.SheetData());
+
+                // save worksheet
+                WriteListObjectsToExcelWorksheet(item, newWorksheetPart);
+                newWorksheetPart.Worksheet.Save();
+
+                // create the worksheet to workbook relation
+                if (worksheetNumber == 1)
+                    spreadsheet.WorkbookPart.Workbook.AppendChild(new DocumentFormat.OpenXml.Spreadsheet.Sheets());
+
+                spreadsheet.WorkbookPart.Workbook.GetFirstChild<DocumentFormat.OpenXml.Spreadsheet.Sheets>().AppendChild(new DocumentFormat.OpenXml.Spreadsheet.Sheet()
+                {
+                    Id = spreadsheet.WorkbookPart.GetIdOfPart(newWorksheetPart),
+                    SheetId = (uint)worksheetNumber,
+                    Name = worksheetNumber.ToString()
+                });
+
+                worksheetNumber++;
+            }
+
+            spreadsheet.WorkbookPart.Workbook.Save();
+        }
+
+        #region WriteExcelFileFromExpandoList
         public static void WriteExcelFileFromExpandoList(List<ExpandoObject> expandoListObject, string filePath)
         {
             // Create a spreadsheet document by supplying the filepath.
@@ -224,204 +317,52 @@ namespace ConvertExcel
             }
             spreadsheetDocument.Close();
         }
+        #endregion
 
-        private static void WriteDataTableToExcelWorksheet(DataTable dt, WorksheetPart worksheetPart)
+        
+
+        private static void WriteListObjectsToExcelWorksheet(List<Object> listObject, WorksheetPart worksheetPart)
         {
             var worksheet = worksheetPart.Worksheet;
             var sheetData = worksheet.GetFirstChild<SheetData>();
 
-            string cellValue = "";
-
-            //  Create a Header Row in our Excel file, containing one header for each Column of data in our DataTable.
-            //
-            //  We'll also create an array, showing which type each column of data is (Text or Numeric), so when we come to write the actual
-            //  cells of data, we'll know if to write Text values or Numeric cell values.
-            int numberOfColumns = dt.Columns.Count;
-            bool[] IsNumericColumn = new bool[numberOfColumns];
-
-            string[] excelColumnNames = new string[numberOfColumns];
-            for (int n = 0; n < numberOfColumns; n++)
-                excelColumnNames[n] = GetExcelColumnName(n);
-
-            //
-            //  Create the Header row in our Excel Worksheet
-            //
             uint rowIndex = 1;
-
-            var headerRow = new Row { RowIndex = rowIndex };  // add a row at the top of spreadsheet
-            sheetData.Append(headerRow);
-
-            for (int colInx = 0; colInx < numberOfColumns; colInx++)
+            int propertyCounter = 0;
+            List<String> excelColumnNames = new List<String>();
+            
+            if (listObject.Count > 0) 
             {
-                DataColumn col = dt.Columns[colInx];
-                AppendTextCell(excelColumnNames[colInx] + "1", col.ColumnName, headerRow);
-                IsNumericColumn[colInx] = (col.DataType.FullName == "System.Decimal") || (col.DataType.FullName == "System.Int32");
+                var headerRow = new Row { RowIndex = rowIndex };  // add a row at the top of spreadsheet
+                sheetData.Append(headerRow);
+
+                Type myType = listObject[0].GetType();
+                IList<PropertyInfo> props = new List<PropertyInfo>(myType.GetProperties());
+                foreach (var property in props) 
+                {
+                    excelColumnNames.Add(GetExcelColumnName(propertyCounter));
+                    AppendTextCell(GetExcelColumnName(propertyCounter) + "1", property.Name.ToString(), headerRow);
+                    ++propertyCounter;
+                }
             }
-
-            //
-            //  Now, step through each row of data in our DataTable...
-            //
-            double cellNumericValue = 0;
-            foreach (DataRow dr in dt.Rows)
+            
+            foreach (var subitem in listObject)
             {
-                // ...create a new row, and append a set of this row's data to it.
+                Type myType = subitem.GetType();
+                IList<PropertyInfo> props = new List<PropertyInfo>(myType.GetProperties());
+
                 ++rowIndex;
                 var newExcelRow = new Row { RowIndex = rowIndex };  // add a row at the top of spreadsheet
                 sheetData.Append(newExcelRow);
-
-                for (int colInx = 0; colInx < numberOfColumns; colInx++)
+                int colInx = 0;
+                foreach (PropertyInfo prop in props)
                 {
-                    cellValue = dr.ItemArray[colInx].ToString();
-
-                    // Create cell with data
-                    if (IsNumericColumn[colInx])
-                    {
-                        //  For numeric cells, make sure our input data IS a number, then write it out to the Excel file.
-                        //  If this numeric value is NULL, then don't write anything to the Excel file.
-                        cellNumericValue = 0;
-                        if (double.TryParse(cellValue, out cellNumericValue))
-                        {
-                            cellValue = cellNumericValue.ToString();
-                            AppendNumericCell(excelColumnNames[colInx] + rowIndex.ToString(), cellValue, newExcelRow);
-                        }
-                    }
-                    else
-                    {
-                        //  For text cells, just write the input data straight out to the Excel file.
-                        AppendTextCell(excelColumnNames[colInx] + rowIndex.ToString(), cellValue, newExcelRow);
-                    }
+                    object propValue = prop.GetValue(subitem, null);
+                    AppendTextCell(excelColumnNames[colInx] + rowIndex.ToString(), propValue.ToString(), newExcelRow);
+                    
+                    ++colInx;
+                    Debug.WriteLine(propValue);
                 }
             }
-        }
-
-
-        public static List<Object> ConvertExcelArchiveToListObjects(string filePath)
-        {
-            DateTime begin = DateTime.UtcNow;
-            List<Object> listObjects = new List<Object>();
-            using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
-            {
-                WorkbookPart wbPart = spreadsheetDocument.WorkbookPart;
-                Sheets theSheets = wbPart.Workbook.Sheets;
-
-                SharedStringTablePart sstPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
-                SharedStringTable ssTable = null;
-                if (sstPart != null)
-                    ssTable = sstPart.SharedStringTable;
-
-                // Get the CellFormats for cells without defined data types
-                WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
-                CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
-                var sheets = wbPart.Workbook.Sheets.Cast<Sheet>().ToList();
-
-                foreach (WorksheetPart worksheetpart in wbPart.WorksheetParts)
-                {
-                    Worksheet worksheet = worksheetpart.Worksheet;
-
-                    string partRelationshipId = wbPart.GetIdOfPart(worksheetpart);
-                    var correspondingSheet = sheets.FirstOrDefault(
-                        s => s.Id.HasValue && s.Id.Value == partRelationshipId);
-                    Debug.Assert(correspondingSheet != null);
-                    // Grab the sheet name
-                    string sheetName = correspondingSheet.GetAttribute("name", "").Value;
-
-                    // create a dynamic assembly and module
-                    AssemblyName assemblyName = new AssemblyName();
-                    assemblyName.Name = "tmpAssembly";
-                    AssemblyBuilder assemblyBuilder = Thread.GetDomain().DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
-                    ModuleBuilder module = assemblyBuilder.DefineDynamicModule("tmpModule");
-
-                    // create a new type builder
-                    TypeBuilder typeBuilder = module.DefineType("MyDynamicType", TypeAttributes.Public | TypeAttributes.Class);
-
-                    Debug.WriteLine(sheetName);
-                    var rowContent = worksheet.Descendants<Row>().Skip(1);
-
-                    var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
-                    MethodAttributes GetSetAttr =
-                       MethodAttributes.Public |
-                       MethodAttributes.HideBySig;
-                    foreach (var columnName in columnHeaders)
-                    {
-                        // Generate a public property
-                        var field = typeBuilder.DefineField("_" + columnName.ToString(), typeof(String), FieldAttributes.Private);
-                        PropertyBuilder property =
-                            typeBuilder.DefineProperty(columnName.ToString(),
-                                             System.Reflection.PropertyAttributes.None,
-                                             typeof(string),
-                                             new Type[] { typeof(string) });
-
-                        // Generate getter method
-                        var getter = typeBuilder.DefineMethod("get_" + columnName.ToString(), GetSetAttr, typeof(String), Type.EmptyTypes);
-
-                        var il = getter.GetILGenerator();
-
-                        il.Emit(OpCodes.Ldarg_0);        // Push "this" on the stack
-                        il.Emit(OpCodes.Ldfld, field);   // Load the field "_Name"
-                        il.Emit(OpCodes.Ret);            // Return
-
-                        property.SetGetMethod(getter);
-
-                        // Generate setter method
-
-                        var setter = typeBuilder.DefineMethod("set_" + columnName, GetSetAttr, null, new[] { typeof(string) });
-
-                        il = setter.GetILGenerator();
-
-                        il.Emit(OpCodes.Ldarg_0);        // Push "this" on the stack
-                        il.Emit(OpCodes.Ldarg_1);        // Push "value" on the stack
-                        il.Emit(OpCodes.Stfld, field);   // Set the field "_Name" to "value"
-                        il.Emit(OpCodes.Ret);            // Return
-
-                        property.SetSetMethod(setter);
-                    }
-
-                    dynamic expandoObjectClass = new ExpandoObject();
-                    List<Object> listObjectsCustomClasses = new List<Object>();
-                    foreach (var dataRow in rowContent)
-                    {
-                        Type generatedType = typeBuilder.CreateType();
-                        object generatedObject = Activator.CreateInstance(generatedType);
-
-                        PropertyInfo[] properties = generatedType.GetProperties();
-
-                        int propertiesCounter = 0;
-
-                        // Loop over the values that we will assign to the properties
-
-                        var rowCells = dataRow.Descendants<Cell>();
-                        var value = string.Empty;
-                        foreach (var rowCell in rowCells)
-                        {
-                            if (rowCell.DataType != null
-                                && rowCell.DataType.HasValue
-                                && rowCell.DataType == CellValues.SharedString
-                                && int.Parse(rowCell.CellValue.InnerText) < ssTable.ChildElements.Count)
-                            {
-                                value = ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty;
-                            }
-                            else
-                            {
-                                if (rowCell.CellValue != null && rowCell.CellValue.InnerText != null)
-                                {
-                                    value = rowCell.CellValue.InnerText;
-                                }
-                                else
-                                {
-                                    value = string.Empty;
-                                }
-                            }
-                            properties[propertiesCounter].SetValue(generatedObject, value, null);
-                            propertiesCounter++;
-                        }
-                        listObjectsCustomClasses.Add(generatedObject);
-                    }
-                    listObjects.Add(listObjectsCustomClasses);
-                }
-            }
-            DateTime end = DateTime.UtcNow;
-            Console.WriteLine("Measured time: " + (end - begin).TotalMinutes + " minutes.");
-            return listObjects;
         }
     }
 }
