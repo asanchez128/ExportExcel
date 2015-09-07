@@ -16,17 +16,20 @@ namespace ConvertExcel
 {
     public partial class CreateExcelFile
     {
+        /// <summary>
+        /// Convierte un índice de columna con índice cero a una referencia de columna de Excel
+        /// (A, B, C.. Y, Y, AA, AB, AC... AY, AZ, B1, B2..)
+        ///
+        ///  Ej. GetExcelColumnName(0) should return "A"
+        ///      GetExcelColumnName(25) should return "Z"
+        ///      GetExcelColumnName(26) should return "AA"
+        ///      GetExcelColumnName(27) should return "AB"
+        ///      ..etc..
+        /// </summary>
+        /// <param name="columnIndex"> Índice cero de la columna de Excel. </param>
+        /// <returns> El índice a una referencia de columna de Excel. </returns>
         private static string GetExcelColumnName(int columnIndex)
         {
-            //  Convert a zero-based column index into an Excel column reference  (A, B, C.. Y, Y, AA, AB, AC... AY, AZ, B1, B2..)
-            //
-            //  eg  GetExcelColumnName(0) should return "A"
-            //      GetExcelColumnName(1) should return "B"
-            //      GetExcelColumnName(25) should return "Z"
-            //      GetExcelColumnName(26) should return "AA"
-            //      GetExcelColumnName(27) should return "AB"
-            //      ..etc..
-            //
             if (columnIndex < 26)
                 return ((char)('A' + columnIndex)).ToString();
 
@@ -36,117 +39,14 @@ namespace ConvertExcel
             return string.Format("{0}{1}", firstChar, secondChar);
         }
 
-        public static List<ExpandoObject> GetSpreadsheetData(string workSheet, string filePath)
-        {
-            List<ExpandoObject> data = new List<ExpandoObject>();
-
-            using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
-            {
-                // Get the worksheet we are working with
-                IEnumerable<Sheet> sheets = spreadsheetDocument.WorkbookPart.Workbook.Descendants<Sheet>();
-                WorksheetPart worksheetPart = (WorksheetPart)spreadsheetDocument.WorkbookPart.GetPartById(sheets.First().Id);
-                Worksheet worksheet = worksheetPart.Worksheet;
-                SharedStringTablePart sstPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
-                SharedStringTable ssTable = null;
-                if (sstPart != null)
-                    ssTable = sstPart.SharedStringTable;
-                // Get the CellFormats for cells without defined data types
-                WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
-                CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
-
-                ExtractRowsData(data, worksheet, ssTable, cellFormats);
-            }
-
-            return data;
-        }
-
         /// <summary>
-        /// Get the data using the first row as columns and the rest of the rows as data
+        /// Dados una cadena con texto y  una parte de tabla de cadenas compartidas, el método crea un SharedStringItem 
+        /// con la cadena de texto y la inserta en parte de tabla de cadenas compartidas. Si la cadena ya existe como 
+        /// objecto de cadena compartida  la función regresa su índice. 
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="worksheet"></param>
-        /// <param name="ssTable"></param>
-        /// <param name="cellFormats"></param>
-        private static void ExtractRowsData(List<ExpandoObject> data, Worksheet worksheet, SharedStringTable ssTable, CellFormats cellFormats)
-        {
-            var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
-            var columnHeadersCellReference = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => c.CellReference.InnerText.Replace("1", string.Empty)).ToArray();
-            // All rows are selected.
-            var spreadsheetData = from row in worksheet.Descendants<Row>()
-                                  select row;
-
-            int dataRowIndex = 1;
-            foreach (var dataRow in spreadsheetData)
-            {
-                dynamic row = new ExpandoObject();
-                Cell[] rowCells = dataRow.Descendants<Cell>().ToArray();
-                for (int i = 0; i < columnHeaders.Length; i++)
-                {
-                    // Find and add the correct cell to the row object
-                    Cell cell = dataRow.Descendants<Cell>().Where(c => c.CellReference == columnHeadersCellReference[i] + dataRow.RowIndex).FirstOrDefault();
-                    if (cell != null)
-                        ((IDictionary<String, Object>)row).Add(new KeyValuePair<String, Object>(dataRowIndex + "," + i, ProcessCellValue(cell, ssTable, cellFormats)));
-                }
-                data.Add(row);
-                ++dataRowIndex;
-            }
-        }
-
-        /// <summary>
-        /// Process the valus of a cell and return a .NET value
-        /// </summary>
-        static Func<Cell, SharedStringTable, CellFormats, Object> ProcessCellValue = (c, ssTable, cellFormats) =>
-        {
-            // If there is no data type, this must be a string that has been formatted as a number
-            if (c.DataType == null && c.CellValue != null)
-            {
-                if (c.StyleIndex != null)
-                {
-                    CellFormat cf = cellFormats.Descendants<CellFormat>().ElementAt<CellFormat>(Convert.ToInt32(c.StyleIndex.Value));
-                    if (cf.NumberFormatId >= 0 && cf.NumberFormatId <= 13) // This is a number
-                        return Convert.ToDecimal(c.CellValue.Text);
-                    else if (cf.NumberFormatId >= 14 && cf.NumberFormatId <= 22) // This is a date
-                        return DateTime.FromOADate(Convert.ToDouble(c.CellValue.Text));
-                    else
-                        return c.CellValue.Text;
-                }
-            }
-            else if (c.DataType == null && c.CellValue == null)
-            {
-                return string.Empty;
-            }
-
-            if (c.DataType != null)
-            {
-                switch (c.DataType.Value)
-                {
-                    case CellValues.SharedString:
-                        return ssTable.ChildElements[Convert.ToInt32(c.CellValue.Text)].InnerText;
-                    case CellValues.Boolean:
-                        return c.CellValue.Text == "1" ? true : false;
-                    case CellValues.Date:
-                        return DateTime.FromOADate(Convert.ToDouble(c.CellValue.Text));
-                    case CellValues.Number:
-                        return Convert.ToDecimal(c.CellValue.Text);
-                    default:
-                        if (c.CellValue != null)
-                            return c.CellValue.Text;
-                        return string.Empty;
-                }
-            }
-            else
-            {
-                if (c.CellValue != null)
-                    return c.CellValue.Text;
-                return string.Empty;
-            }
-        };
-
-        // Given text and a SharedStringTablePart, creates a SharedStringItem with the specified text 
-        // and inserts it into the SharedStringTablePart. If the item already exists, returns its index.
         private static int InsertSharedStringItem(string text, SharedStringTablePart shareStringPart)
         {
-            // If the part does not contain a SharedStringTable, create one.
+            // Si no hay una parte de tabla de cadenas compartidas, crea una.
             if (shareStringPart.SharedStringTable == null)
             {
                 shareStringPart.SharedStringTable = new SharedStringTable();
@@ -154,7 +54,7 @@ namespace ConvertExcel
 
             int i = 0;
 
-            // Iterate through all the items in the SharedStringTable. If the text already exists, return its index.
+            // Buscar en todos los elementos de SharedStringTable. Si el texto ya existe, el método regresa su índice.
             foreach (SharedStringItem item in shareStringPart.SharedStringTable.Elements<SharedStringItem>())
             {
                 if (item.InnerText == text)
@@ -165,17 +65,18 @@ namespace ConvertExcel
                 i++;
             }
 
-            // The text does not exist in the part. Create the SharedStringItem and return its index.
+            // El texto no existe en SharedStringTablePart. Crea un SharedStringItem y regresa su índice.
             shareStringPart.SharedStringTable.AppendChild(new SharedStringItem(new DocumentFormat.OpenXml.Spreadsheet.Text(text)));
             shareStringPart.SharedStringTable.Save();
 
             return i;
         }
 
-        // Given a WorkbookPart, inserts a new worksheet.
+        /// <summary>
+        /// Inserta una nueva hoja en una parte de libro de Excel. 
+        /// </summary>
         private static WorksheetPart InsertWorksheet(WorkbookPart workbookPart)
         {
-            // Add a new worksheet part to the workbook.
             WorksheetPart newWorksheetPart = workbookPart.AddNewPart<WorksheetPart>();
             newWorksheetPart.Worksheet = new Worksheet(new SheetData());
             newWorksheetPart.Worksheet.Save();
@@ -183,7 +84,7 @@ namespace ConvertExcel
             Sheets sheets = workbookPart.Workbook.GetFirstChild<Sheets>();
             string relationshipId = workbookPart.GetIdOfPart(newWorksheetPart);
 
-            // Get a unique ID for the new sheet.
+            // Asigna una ID única a cada hoja de Excel.
             uint sheetId = 1;
             if (sheets.Elements<Sheet>().Count() > 0)
             {
@@ -192,7 +93,7 @@ namespace ConvertExcel
 
             string sheetName = "Sheet" + sheetId;
 
-            // Append the new worksheet and associate it with the workbook.
+            // Agrega una nueva hoja y la asocia con una parte del libro.
             Sheet sheet = new Sheet() { Id = relationshipId, SheetId = sheetId, Name = sheetName };
             sheets.Append(sheet);
             workbookPart.Workbook.Save();
@@ -200,15 +101,16 @@ namespace ConvertExcel
             return newWorksheetPart;
         }
 
-        // Given a column name, a row index, and a WorksheetPart, inserts a cell into the worksheet. 
-        // If the cell already exists, returns it. 
+        /// <summary>
+        /// Dados el nombre de columna, el índice de una fila y la parte de una hoja de Excel, el método inserta 
+        /// una celda en el libro de Excel. 
+        /// </summary>
         private static Cell InsertCellInWorksheet(string columnName, uint rowIndex, WorksheetPart worksheetPart)
         {
             Worksheet worksheet = worksheetPart.Worksheet;
             SheetData sheetData = worksheet.GetFirstChild<SheetData>();
             string cellReference = columnName + rowIndex;
 
-            // If the worksheet does not contain a row with the specified row index, insert one.
             Row row;
             if (sheetData.Elements<Row>().Where(r => r.RowIndex == rowIndex).Count() != 0)
             {
@@ -220,14 +122,12 @@ namespace ConvertExcel
                 sheetData.Append(row);
             }
 
-            // If there is not a cell with the specified column name, insert one.  
             if (row.Elements<Cell>().Where(c => c.CellReference.Value == columnName + rowIndex).Count() > 0)
             {
                 return row.Elements<Cell>().Where(c => c.CellReference.Value == cellReference).First();
             }
             else
             {
-                // Cells must be in sequential order according to CellReference. Determine where to insert the new cell.
                 Cell refCell = null;
                 foreach (Cell cell in row.Elements<Cell>())
                 {
@@ -246,10 +146,14 @@ namespace ConvertExcel
             }
         }
 
+        /// <summary>
+        /// Actualiza la información de una celda. 
+        /// </summary>
+        /// <exception cref="System.IO.IOException">Excepción lanzada cuando el archivo de Excel 
+        /// está siendo usado por otro proceso.</exception>
         public static void UpdateCell(string docName, string text,
             uint rowIndex, string columnName)
         {
-            // Open the document for editing.
             using (SpreadsheetDocument spreadSheet =
                      SpreadsheetDocument.Open(docName, true))
             {
@@ -265,13 +169,14 @@ namespace ConvertExcel
                     cell.DataType =
                         new EnumValue<CellValues>(CellValues.Number);
 
-                    // Save the worksheet.
                     worksheetPart.Worksheet.Save();
                 }
             }
-
         }
 
+        /// <summary>
+        /// Obtiene la parte de hoja de un archivo de Excel (xlsx). 
+        /// </summary>
         private static WorksheetPart
              GetWorksheetPartByName(SpreadsheetDocument document,
              string sheetName)
@@ -282,7 +187,7 @@ namespace ConvertExcel
 
             if (sheets.Count() == 0)
             {
-                // The specified worksheet does not exist.
+                // La hoja especificada no existe.
                 return null;
             }
 
@@ -290,11 +195,12 @@ namespace ConvertExcel
             WorksheetPart worksheetPart = (WorksheetPart)
                  document.WorkbookPart.GetPartById(relationshipId);
             return worksheetPart;
-
         }
 
-        // Given a worksheet, a column name, and a row index, 
-        // gets the cell at the specified column and row
+        /// <summary>
+        /// Dados la hoja de Excel, el nombre de la columna y el índice de la fila 
+        /// el método obtiene la celda en la columna y fila especificadas. 
+        /// </summary>
         private static Cell GetCell(Worksheet worksheet,
                   string columnName, uint rowIndex)
         {
@@ -308,204 +214,73 @@ namespace ConvertExcel
                    rowIndex, true) == 0).First();
         }
 
-
-        // Given a worksheet and a row index, return the row.
+        /// <summary>
+        /// Dada una hoja de Excel y el índice de una fila, regresa la fila. 
+        /// </summary>
         private static Row GetRow(Worksheet worksheet, uint rowIndex)
         {
             return worksheet.GetFirstChild<SheetData>().
               Elements<Row>().Where(r => r.RowIndex == rowIndex).First();
         }
 
-        public static List<List<Object>> ConvertExcelArchiveToListObjectsSAXApproach(string filePath)
+        public static DataTable ListToDataTable<T>(List<T> list)
         {
-            DateTime begin = DateTime.UtcNow;
-            List<List<Object>> listObjects = new List<List<Object>>();
-            using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
+            DataTable dt = new DataTable();
+
+            foreach (PropertyInfo info in typeof(T).GetProperties())
             {
-                WorkbookPart wbPart = spreadsheetDocument.WorkbookPart;
-                Sheets theSheets = wbPart.Workbook.Sheets;
-
-                SharedStringTablePart sstPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
-                SharedStringTable ssTable = null;
-                if (sstPart != null)
-                    ssTable = sstPart.SharedStringTable;
-
-                // Get the CellFormats for cells without defined data types
-                WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
-                CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
-                var sheets = wbPart.Workbook.Sheets.Cast<Sheet>().ToList();
-
-                foreach (WorksheetPart worksheetpart in wbPart.WorksheetParts)
-                {
-                    //Worksheet worksheet = worksheetpart.Worksheet;
-                    OpenXmlPartReader reader = new OpenXmlPartReader(worksheetpart);
-                    bool firstRow = false;
-                    List<String> columnValues = new List<String>();
-                    Cell c;
-                    var value = string.Empty;
-
-                    string partRelationshipId = wbPart.GetIdOfPart(worksheetpart);
-                    var correspondingSheet = sheets.FirstOrDefault(
-                        s => s.Id.HasValue && s.Id.Value == partRelationshipId);
-                    Debug.Assert(correspondingSheet != null);
-                    // Grab the sheet name
-                    string sheetName = correspondingSheet.GetAttribute("name", "").Value;
-
-                    // create a dynamic assembly and module
-                    AssemblyName assemblyName = new AssemblyName();
-                    assemblyName.Name = "tmpAssembly";
-                    AssemblyBuilder assemblyBuilder = Thread.GetDomain().DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
-                    ModuleBuilder module = assemblyBuilder.DefineDynamicModule("tmpModule");
-
-                    // create a new type builder
-                    TypeBuilder typeBuilder = module.DefineType("MyDynamicType", TypeAttributes.Public | TypeAttributes.Class);
-
-                    MethodAttributes GetSetAttr =
-                       MethodAttributes.Public |
-                       MethodAttributes.HideBySig;
-                    int numberOfColumns = 0;
-                    while (reader.Read())
-                    {
-                        if (reader.ElementType == typeof(SheetData))
-                        {
-                            // Get First row.
-                            // It assumes that all of the columns with information in the first 
-                            // row are next to each other.
-                            // If there are empty columns it will not add them. 
-                            reader.ReadFirstChild();
-                            if (reader.ElementType == typeof(Row))
-                            {
-                                reader.ReadFirstChild();
-                                do
-                                {
-                                    if (reader.ElementType == typeof(Cell))
-                                    {
-                                        c = (Cell)reader.LoadCurrentElement();
-
-                                        if (c.DataType != null
-                                            && c.DataType.HasValue
-                                            && c.DataType == CellValues.SharedString
-                                            && int.Parse(c.CellValue.InnerText) < ssTable.ChildElements.Count)
-                                        {
-                                            value = ssTable.ChildElements[int.Parse(c.CellValue.InnerText)].InnerText ?? string.Empty;
-                                        }
-                                        else
-                                        {
-                                            if (c.CellValue != null && c.CellValue.InnerText != null)
-                                            {
-                                                value = c.CellValue.InnerText;
-                                            }
-                                            else
-                                            {
-                                                value = string.Empty;
-                                            }
-                                        }
-                                        if (value != string.Empty)
-                                        {
-                                            columnValues.Add(value);
-                                            ++numberOfColumns;
-                                        }
-                                    }
-                                } while (reader.ReadNextSibling());
-                            }
-                            reader.Read();
-                            // Generate Type
-
-                            foreach (var columnName in columnValues)
-                            {
-                                // Generate a public property
-                                var field = typeBuilder.DefineField("_" + columnName.ToString(), typeof(String), FieldAttributes.Private);
-                                PropertyBuilder property =
-                                    typeBuilder.DefineProperty(columnName.ToString(),
-                                                        System.Reflection.PropertyAttributes.None,
-                                                        typeof(string),
-                                                        new Type[] { typeof(string) });
-
-                                // Generate getter method
-                                var getter = typeBuilder.DefineMethod("get_" + columnName.ToString(), GetSetAttr, typeof(String), Type.EmptyTypes);
-
-                                var il = getter.GetILGenerator();
-
-                                il.Emit(OpCodes.Ldarg_0);        // Push "this" on the stack
-                                il.Emit(OpCodes.Ldfld, field);   // Load the field "_Name"
-                                il.Emit(OpCodes.Ret);            // Return
-
-                                property.SetGetMethod(getter);
-
-                                // Generate setter method
-
-                                var setter = typeBuilder.DefineMethod("set_" + columnName, GetSetAttr, null, new[] { typeof(string) });
-
-                                il = setter.GetILGenerator();
-
-                                il.Emit(OpCodes.Ldarg_0);        // Push "this" on the stack
-                                il.Emit(OpCodes.Ldarg_1);        // Push "value" on the stack
-                                il.Emit(OpCodes.Stfld, field);   // Set the field "_Name" to "value"
-                                il.Emit(OpCodes.Ret);            // Return
-
-                                property.SetSetMethod(setter);
-                            }
-
-                            dynamic expandoObjectClass = new ExpandoObject();
-                            List<Object> listObjectsCustomClasses = new List<Object>();
-                            // Read all rows in Sheet Data
-                            do
-                            {
-                                if (reader.ElementType == typeof(Row))
-                                {
-                                    reader.ReadFirstChild();
-                                    Type generatedType = typeBuilder.CreateType();
-                                    object generatedObject = Activator.CreateInstance(generatedType);
-
-                                    PropertyInfo[] properties = generatedType.GetProperties();
-
-                                    int propertiesCounter = 0;
-                                    // Read all the cells in the row.
-                                    do
-                                    {
-                                        if (reader.ElementType == typeof(Cell))
-                                        {
-                                            c = (Cell)reader.LoadCurrentElement();
-
-                                            if (c.DataType != null
-                                                && c.DataType.HasValue
-                                                && c.DataType == CellValues.SharedString
-                                                && int.Parse(c.CellValue.InnerText) < ssTable.ChildElements.Count)
-                                            {
-                                                value = ssTable.ChildElements[int.Parse(c.CellValue.InnerText)].InnerText ?? string.Empty;
-                                            }
-                                            else
-                                            {
-                                                if (c.CellValue != null && c.CellValue.InnerText != null)
-                                                {
-                                                    value = c.CellValue.InnerText;
-                                                }
-                                                else
-                                                {
-                                                    value = string.Empty;
-                                                }
-                                            }
-                                            
-                                            if(propertiesCounter < numberOfColumns)
-                                            {
-                                                properties[propertiesCounter].SetValue(generatedObject, value, null);
-                                            }
-                                            Debug.WriteLine(value);
-                                            propertiesCounter++;
-                                        }
-                                    } while (reader.ReadNextSibling());
-                                    Debug.WriteLine("");
-                                    listObjectsCustomClasses.Add(generatedObject);
-                                }
-                            } while (reader.Read() && reader.ElementType == typeof(Row));
-                            listObjects.Add(listObjectsCustomClasses);
-                        } 
-                    }
-                }
+                dt.Columns.Add(new DataColumn(info.Name, GetNullableType(info.PropertyType)));
             }
-            DateTime end = DateTime.UtcNow;
-            Console.WriteLine("Measured time: " + (end - begin).TotalMinutes + " minutes.");
-            return listObjects;
+            foreach (T t in list)
+            {
+                DataRow row = dt.NewRow();
+                foreach (PropertyInfo info in typeof(T).GetProperties())
+                {
+                    // This is the so-called nullable friendly part
+                    if (!IsNullableType(info.PropertyType))
+                        row[info.Name] = info.GetValue(t, null);
+                    else
+                        row[info.Name] = (info.GetValue(t, null) ?? DBNull.Value);
+                }
+                dt.Rows.Add(row);
+            }
+            return dt;
+        }
+        private static Type GetNullableType(Type t)
+        {
+            Type returnType = t;
+            if (t.IsGenericType && t.GetGenericTypeDefinition().Equals(typeof(Nullable<>)))
+            {
+                returnType = Nullable.GetUnderlyingType(t);
+            }
+            return returnType;
+        }
+        private static bool IsNullableType(Type type)
+        {
+            return (type == typeof(string) ||
+                    type.IsArray ||
+                    (type.IsGenericType &&
+                     type.GetGenericTypeDefinition().Equals(typeof(Nullable<>))));
+        }
+
+        private static void AppendTextCell(string cellReference, string cellStringValue, Row excelRow)
+        {
+            //  Add a new Excel Cell to our Row 
+            Cell cell = new Cell() { CellReference = cellReference, DataType = CellValues.String };
+            CellValue cellValue = new CellValue();
+            cellValue.Text = cellStringValue;
+            cell.Append(cellValue);
+            excelRow.Append(cell);
+        }
+
+        private static void AppendNumericCell(string cellReference, string cellStringValue, Row excelRow)
+        {
+            //  Add a new Excel Cell to our Row 
+            Cell cell = new Cell() { CellReference = cellReference };
+            CellValue cellValue = new CellValue();
+            cellValue.Text = cellStringValue;
+            cell.Append(cellValue);
+            excelRow.Append(cell);
         }
     }
 }
