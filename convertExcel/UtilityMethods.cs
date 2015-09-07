@@ -316,89 +316,10 @@ namespace ConvertExcel
               Elements<Row>().Where(r => r.RowIndex == rowIndex).First();
         }
 
-        //public static List<ExpandoObject> ConvertExcelArchiveToListObjects(string filePath)
-        //{
-        //    DateTime begin = DateTime.UtcNow;
-        //    List<ExpandoObject> listExpandoObjects = new List<ExpandoObject>();
-        //    using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
-        //    {
-        //        WorkbookPart wbPart = spreadsheetDocument.WorkbookPart;
-        //        Sheets theSheets = wbPart.Workbook.Sheets;
-
-        //        SharedStringTablePart sstPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
-        //        SharedStringTable ssTable = null;
-        //        if (sstPart != null)
-        //            ssTable = sstPart.SharedStringTable;
-
-        //        // Get the CellFormats for cells without defined data types
-        //        WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
-        //        CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
-        //        var sheets = wbPart.Workbook.Sheets.Cast<Sheet>().ToList();
-
-        //        foreach (WorksheetPart worksheetpart in wbPart.WorksheetParts)
-        //        {                     
-        //            Worksheet worksheet = worksheetpart.Worksheet;
-
-        //            string partRelationshipId = wbPart.GetIdOfPart(worksheetpart);
-        //            var correspondingSheet = sheets.FirstOrDefault(
-        //                s => s.Id.HasValue && s.Id.Value == partRelationshipId);
-        //            Debug.Assert(correspondingSheet != null);
-        //            string sheetName = correspondingSheet.GetAttribute("name", "").Value;
-        //            // Grab the sheet name each time through your loop
-
-        //            Debug.WriteLine(sheetName);
-        //            var rowContent = worksheet.Descendants<Row>().Skip(1); 
-        //            var columnHeaders = worksheet.Descendants<Row>().First().Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats))).ToArray();
-
-        //            dynamic expandoObjectClass = new ExpandoObject();
-        //            List<ExpandoObject> listExpandoObjectRows = new List<ExpandoObject>();
-        //            foreach (var dataRow in rowContent)
-        //            {
-        //                dynamic row = new ExpandoObject();
-        //                var rowCells = dataRow.Descendants<Cell>();
-        //                int cellIndex = 0;
-        //                foreach (var rowCell in rowCells)
-        //                {
-        //                    if (rowCell.DataType != null
-        //                        && rowCell.DataType.HasValue
-        //                        && rowCell.DataType == CellValues.SharedString
-        //                        && int.Parse(rowCell.CellValue.InnerText) < ssTable.ChildElements.Count)
-        //                    {
-        //                        ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty);
-        //                    }
-        //                    else
-        //                    {
-        //                        if (rowCell.CellValue != null && rowCell.CellValue.InnerText != null)
-        //                        {
-        //                            Debug.WriteLine(rowCell.CellValue.InnerText);
-        //                            ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), rowCell.CellValue.InnerText);
-        //                        }
-        //                        else 
-        //                        {
-        //                            Debug.WriteLine(string.Empty);
-        //                            ((IDictionary<String, Object>)row).Add(columnHeaders[cellIndex].ToString(), string.Empty);
-        //                        }
-        //                    }
-        //                    ++cellIndex;
-        //                }
-        //                listExpandoObjectRows.Add(row);
-
-        //            }
-        //            ((IDictionary<String, Object>)expandoObjectClass).Add(sheetName, listExpandoObjectRows);
-        //            listExpandoObjects.Add(expandoObjectClass);
-        //        }
-
-        //        spreadsheetDocument.Close();
-        //    }
-        //    DateTime end = DateTime.UtcNow;
-        //    Console.WriteLine("Measured time: " + (end-begin).TotalMinutes + " minutes.");
-        //    return listExpandoObjects;
-        //}
-
-        public static List<Object> ConvertExcelArchiveToListObjectsSAXApproach(string filePath)
+        public static List<List<Object>> ConvertExcelArchiveToListObjectsSAXApproach(string filePath)
         {
             DateTime begin = DateTime.UtcNow;
-            List<Object> listObjects = new List<Object>();
+            List<List<Object>> listObjects = new List<List<Object>>();
             using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
             {
                 WorkbookPart wbPart = spreadsheetDocument.WorkbookPart;
@@ -578,11 +499,8 @@ namespace ConvertExcel
                                 }
                             } while (reader.Read() && reader.ElementType == typeof(Row));
                             listObjects.Add(listObjectsCustomClasses);
-                        }
-                        
+                        } 
                     }
-
-
                 }
             }
             DateTime end = DateTime.UtcNow;
