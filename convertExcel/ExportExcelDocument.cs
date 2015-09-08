@@ -386,7 +386,15 @@ namespace ConvertExcel
 
                                                 if (propertiesCounter < properties.Count())
                                                 {
-                                                    properties[propertiesCounter].SetValue(generatedObject, value, null);
+                                                    if (value == string.Empty && properties[propertiesCounter].GetType().Name != "String") 
+                                                    {
+                                                        properties[propertiesCounter].SetValue(generatedObject, null, null);
+                                                    }
+                                                    else
+                                                    {
+                                                        properties[propertiesCounter].SetValue(generatedObject, value, null);
+                                                    }
+                                                    
                                                 }
                                                 propertiesCounter++;
                                             }
@@ -420,7 +428,7 @@ namespace ConvertExcel
                 WorkbookStylesPart workbookStylesPart = spreadsheetDocument.WorkbookPart.GetPartsOfType<WorkbookStylesPart>().First();
                 CellFormats cellFormats = (CellFormats)workbookStylesPart.Stylesheet.CellFormats;
                 var sheets = wbPart.Workbook.Sheets.Cast<Sheet>().ToList();
-
+     
                 foreach (WorksheetPart worksheetpart in wbPart.WorksheetParts)
                 {
                     Worksheet worksheet = worksheetpart.Worksheet;
@@ -438,19 +446,22 @@ namespace ConvertExcel
                         sheetName = "MyDynamicType";
                     }
 
+                    var columnHeaders = worksheet.FirstRow().
+                        Descendants<Cell>().Select(c => Convert.ToString(ProcessCellValue(c, ssTable, cellFormats)));
+
+                    var secondRowTypes = worksheet.SecondRow().
+                        Descendants<Cell>().Select(c => Type.GetType("System." + Convert.GetTypeCode(ProcessCellValue(c, ssTable, cellFormats))));
+
+                    var listTypes = columnHeaders.Zip(secondRowTypes, (c, r) => new Field
+                        (
+                            c,
+                            r
+                        )
+                    );
+
                     var rowContent = worksheet.SkipFirstRow();
 
-                    var columnHeaders = worksheet.FirstRow().
-                        Descendants<Cell>().
-                        Select(
-                        c => new Field
-                            (
-                                Convert.ToString(ProcessCellValue(c, ssTable, cellFormats)),
-                                Type.GetType("System." + Convert.GetTypeCode(ProcessCellValue(c, ssTable, cellFormats)))
-                            )
-                        );
-
-                    Type generatedType = TypeGenerator.CompileResultType(sheetName, columnHeaders);
+                    Type generatedType = TypeGenerator.CompileResultType(sheetName, listTypes);
                     
                     dynamic expandoObjectClass = new ExpandoObject();
                     List<Object> listObjectsCustomClasses = new List<Object>();
@@ -462,28 +473,24 @@ namespace ConvertExcel
 
                         // Loop over the values that we will assign to the properties
                         var rowCells = dataRow.Descendants<Cell>();
-                        var value = string.Empty;
+                        
                         foreach (var rowCell in rowCells)
                         {
-                            if (rowCell.DataType != null
-                                && rowCell.DataType.HasValue
-                                && rowCell.DataType == CellValues.SharedString
-                                && int.Parse(rowCell.CellValue.InnerText) < ssTable.ChildElements.Count)
+                            var value = ProcessCellValue(rowCell, ssTable, cellFormats);
+                            if (propertiesCounter < properties.Count()) 
                             {
-                                value = ssTable.ChildElements[int.Parse(rowCell.CellValue.InnerText)].InnerText ?? string.Empty;
-                            }
-                            else
-                            {
-                                if (rowCell.CellValue != null && rowCell.CellValue.InnerText != null)
+                                if (value.GetType().Name == "String" 
+                                    && value == string.Empty 
+                                    && properties[propertiesCounter].GetType().Name != "String")
                                 {
-                                    value = rowCell.CellValue.InnerText;
+                                    properties[propertiesCounter].SetValue(generatedObject, null, null);
                                 }
                                 else
                                 {
-                                    value = string.Empty;
+                                    properties[propertiesCounter].SetValue(generatedObject, value, null);
                                 }
                             }
-                            properties[propertiesCounter].SetValue(generatedObject, value, null);
+                            
                             propertiesCounter++;
                         }
                         listObjectsCustomClasses.Add(generatedObject);

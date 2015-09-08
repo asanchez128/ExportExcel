@@ -22,7 +22,7 @@ namespace ConvertExcel
 
             
             //CreateExcelFile.UpdateCell("Empty.xlsx", "Hola", 1, "A");
-            var result = CreateExcelFile.ConvertExcelArchiveToListObjects("copiaCarpetaPagosGrupales.xlsx");
+            var result = CreateExcelFile.ConvertExcelArchiveToListObjects("copiaCarpetaPagosGrupales1.xlsx");
             File.WriteAllBytes("Test1.xlsx", CreateExcelFile.CreateExcelDocumentAsStream(result));
            
             

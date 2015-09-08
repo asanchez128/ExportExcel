@@ -266,11 +266,44 @@ namespace ConvertExcel
         private static void AppendTextCell(string cellReference, string cellStringValue, Row excelRow)
         {
             //  Add a new Excel Cell to our Row 
-            Cell cell = new Cell() { CellReference = cellReference, DataType = CellValues.String };
+            Cell cell = new Cell() { CellReference = cellReference };
             CellValue cellValue = new CellValue();
             cellValue.Text = cellStringValue;
             cell.Append(cellValue);
             excelRow.Append(cell);
+        }
+
+        private static void AppendTextCell(string cellReference, Object cellStringValue, Row excelRow, Type type)
+        {
+            //  Add a new Excel Cell to our Row 
+            Cell cell = new Cell() { CellReference = cellReference };
+            SetDataTypeCell(cell, type);
+            CellValue cellValue = new CellValue();
+            cellValue.Text = cellStringValue == null? "" : cellStringValue.ToString();
+            cell.Append(cellValue);
+            excelRow.Append(cell);
+        }
+
+        private static void SetDataTypeCell(Cell cell, Type type) 
+        {
+            string value = type.Name.ToString();
+            Debug.WriteLine(value);
+
+            switch (value)
+            {
+                case "Boolean":
+                    cell.DataType = CellValues.Boolean;
+                    break;
+                case "DateTime":
+                    cell.DataType = CellValues.Date;
+                    break;
+                case "Decimal":
+                    cell.DataType = CellValues.Number;
+                    break;
+                default:
+                    cell.DataType = CellValues.String;
+                    break;
+            }
         }
 
         private static void AppendNumericCell(string cellReference, string cellStringValue, Row excelRow)
