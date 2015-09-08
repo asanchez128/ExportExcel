@@ -367,6 +367,7 @@ namespace ConvertExcel
                 foreach (PropertyInfo prop in props)
                 {
                     object propValue = prop.GetValue(subitem, null);
+                    object propType = prop.GetType();
                     AppendTextCell(excelColumnNames[colInx] + rowIndex.ToString(), propValue.ToString(), newExcelRow);
                     
                     ++colInx;
